@@ -241,9 +241,26 @@ def auto_layered_layout(edges, source, sink):
     """
     Layout izquierda→derecha basado en BFS desde source.
     Coloca source a la izquierda, sink a la derecha, otros nodos por capas.
+    Para redes conocidas (Problema 3 estilo Hillier con A..G) usa layout manual.
     """
-    nodes = list(set(str(n) for u, v, _ in edges for n in (u, v)))
+    nodes = set(str(n) for u, v, _ in edges for n in (u, v))
     source, sink = str(source), str(sink)
+
+    # ── Layout manual para la red estándar A-B-C-D-E-F-G ──────────────
+    # (estilo examen Problema 3 — B arriba, D abajo, C centro, E top-right, F bot-right)
+    standard_7 = {"A", "B", "C", "D", "E", "F", "G"}
+    if nodes == standard_7 and source == "A" and sink == "G":
+        return {
+            "A": (-1.0,  0.0),
+            "B": (-0.45, 0.75),
+            "D": (-0.45,-0.75),
+            "C": ( 0.05, 0.0),
+            "E": ( 0.55, 0.75),
+            "F": ( 0.55,-0.45),
+            "G": ( 1.05, 0.0),
+        }
+
+    nodes = list(nodes)
 
     # BFS desde source para asignar nivel/columna
     levels = {source: 0}
@@ -335,22 +352,36 @@ def draw_max_flow_residual_graph(original_edges, residual_summary, source, sink,
             standoff=18, startstandoff=18
         )
 
-        # Etiqueta: "fwd | bwd"
+        # Etiquetas estilo examen: forward cerca del ORIGEN (u),
+        # backward cerca del DESTINO (v), como en el libro Hillier.
         def _f(x):
             return str(int(x)) if abs(x - int(x)) < 1e-9 else f"{x:.4g}"
-        mx, my = (x0 + x1) / 2, (y0 + y1) / 2
-        # Offset perpendicular para que la etiqueta no se monte sobre la flecha
+
         dx, dy = x1 - x0, y1 - y0
         length = max(math.sqrt(dx*dx + dy*dy), 1e-6)
-        ox, oy = -dy / length * 0.07, dx / length * 0.07  # perpendicular
+        # Posición del label forward: a 25% del arco desde u
+        fx, fy = x0 + 0.25 * dx, y0 + 0.25 * dy
+        # Posición del label backward: a 75% del arco desde u
+        bx, by = x0 + 0.75 * dx, y0 + 0.75 * dy
+        # Offset perpendicular para que las etiquetas no choquen con la flecha
+        ox, oy = -dy / length * 0.06, dx / length * 0.06
 
-        label = f"<b>{_f(fwd)}</b> | {_f(bwd)}"
+        # Forward (capacidad disponible) — color naranja si saturado, oscuro si no
         fig.add_annotation(
-            x=mx + ox, y=my + oy,
-            text=label, showarrow=False,
-            font=dict(size=11, color="#2C3E50" if not saturated else "#A04000"),
-            bgcolor="rgba(255,255,255,0.92)",
-            bordercolor=arrow_color, borderwidth=1, borderpad=3
+            x=fx + ox, y=fy + oy,
+            text=f"<b>{_f(fwd)}</b>", showarrow=False,
+            font=dict(size=13,
+                      color="#A04000" if saturated else "#1A1A1A"),
+            bgcolor="rgba(255,255,255,0.95)",
+            bordercolor=arrow_color, borderwidth=1, borderpad=2
+        )
+        # Backward (flujo enviado / cancelable)
+        fig.add_annotation(
+            x=bx + ox, y=by + oy,
+            text=f"{_f(bwd)}", showarrow=False,
+            font=dict(size=11, color="#566573"),
+            bgcolor="rgba(245,245,245,0.85)",
+            bordercolor="#BDC3C7", borderwidth=1, borderpad=2
         )
 
     # Dibujar nodos
