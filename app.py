@@ -235,6 +235,119 @@ def render_balanced_transport_and_lp(costs, supply, demand, row_lbl=None, col_lb
 
 
 # =============================================================================
+#  Helper: formato C / C' (cortes) para MST estilo examen
+# =============================================================================
+def render_mst_cuts_format(edges, all_nodes, start_node=None):
+    """
+    Ejecuta Prim para extraer la evolución de los cortes (C, C') paso a paso,
+    como pide el formato del examen 2010 (Problema 4 inciso d).
+
+    Renderiza una tabla y un bloque de texto estilo examen:
+      C = {nodos en árbol}     C' = {nodos faltantes}     ← arista agregada
+    """
+    from modules.networks import NetworkSolver
+    all_nodes_set = set(str(n) for n in all_nodes)
+    if not all_nodes_set:
+        return
+    if start_node is None:
+        start_node = sorted(all_nodes_set)[0]
+    start_node = str(start_node)
+
+    ns = NetworkSolver(list(all_nodes_set), edges)
+    res = ns.solve_mst_prim(start=start_node)
+    steps = res.get("steps", [])
+
+    if not steps:
+        st.info("No se pudieron computar los pasos de Prim.")
+        return
+
+    # Construir las filas C / C' paso a paso
+    rows = []
+    current_C = {start_node}
+    # Estado INICIAL (antes del primer paso): C = {start}, próxima arista = step[0]
+    if steps:
+        first_edge = steps[0]["Arista elegida"]
+        first_w = steps[0]["Peso"]
+        rows.append({
+            "Estado": "Inicial",
+            "C": current_C.copy(),
+            "Cprime": all_nodes_set - current_C,
+            "Arista a agregar": first_edge,
+            "Peso": first_w,
+        })
+
+    for i, s in enumerate(steps):
+        edge_str = s["Arista elegida"]
+        try:
+            u_str, v_str = edge_str.split(" — ")
+        except Exception:
+            try:
+                u_str, v_str = edge_str.split("—")
+            except Exception:
+                continue
+        u_str, v_str = u_str.strip(), v_str.strip()
+        # Identificar el nodo nuevo (el que no estaba en C)
+        new_node = v_str if u_str in current_C else u_str
+        current_C.add(new_node)
+
+        # Próxima arista (la del siguiente paso)
+        if i + 1 < len(steps):
+            next_edge = steps[i+1]["Arista elegida"]
+            next_w = steps[i+1]["Peso"]
+        else:
+            next_edge = "✓ MST completo"
+            next_w = ""
+
+        rows.append({
+            "Estado": f"Tras paso {i+1}",
+            "C": current_C.copy(),
+            "Cprime": all_nodes_set - current_C,
+            "Arista a agregar": next_edge,
+            "Peso": next_w,
+        })
+
+    # ── Render ──────────────────────────────────────────────────────────
+    st.markdown("### 📝 Formato C / C' (estilo examen 2010 Problema 4-d)")
+    st.caption(f"Calculado con Prim empezando desde **{start_node}**. "
+               f"Cada renglón es uno de los slots del formato del examen.")
+
+    def _set_str(s):
+        if not s:
+            return "{ }"
+        return "{ " + ", ".join(sorted(s)) + " }"
+
+    # Versión tabla
+    tbl_rows = []
+    for r in rows:
+        tbl_rows.append({
+            "Estado": r["Estado"],
+            "C  (en árbol)": _set_str(r["C"]),
+            "C'  (faltan)": _set_str(r["Cprime"]),
+            "Arista a agregar": r["Arista a agregar"],
+            "Peso": r["Peso"],
+        })
+    st.dataframe(pd.DataFrame(tbl_rows), hide_index=True, use_container_width=True)
+
+    # Versión texto plano estilo examen (cópialo directo a la hoja)
+    st.markdown("**Copia esto en el formato del examen:**")
+    text_lines = []
+    for r in rows:
+        c_str = _set_str(r["C"])
+        cp_str = _set_str(r["Cprime"])
+        if r["Arista a agregar"] == "✓ MST completo":
+            tail = "  ← MST completo ✓"
+        else:
+            tail = f"  ← agregar: {r['Arista a agregar']} (peso {r['Peso']})"
+        text_lines.append(f"C = {c_str:35s}  C' = {cp_str:30s}{tail}")
+    # Rellenar hasta 7 filas como el formato del examen
+    while len(text_lines) < 7:
+        text_lines.append("C = ________________________________   C' = _____________________________")
+    st.code("\n".join(text_lines), language="text")
+
+    return res
+
+
+# =============================================================================
 #  Helper: layout en capas (BFS) + gráfica residual estilo examen
 # =============================================================================
 def auto_layered_layout(edges, source, sink):
@@ -2758,6 +2871,11 @@ elif module == "Networks":
                             use_container_width=True, key=f"mst_s_{_s['Paso']}"
                         )
 
+                # ─── Formato C / C' estilo examen ───
+                _all_mst_nodes = set(str(n) for u, v, _ in _net_edges for n in (u, v))
+                render_mst_cuts_format(_net_edges, _all_mst_nodes,
+                                        start_node=sorted(_all_mst_nodes)[0])
+
             elif is_maxflow:  # Max Flow
                 _res = _net_solver.solve_max_flow(_mf_source, _mf_sink)
                 st.success(f"✅ **Flujo Máximo: {_res['max_flow']:g}**  "
@@ -3559,6 +3677,11 @@ elif module == "📚 Tareas":
                                         for u, v, w in _r["mst_edges"]])
                 st.markdown(f"**Aristas del MST{_sufix}:**")
                 st.dataframe(_mst_df, hide_index=True, use_container_width=True)
+
+                # ─── Formato C / C' estilo examen (Prim) ───
+                _hw_nodes_set = set(str(n) for u, v, _ in _edges for n in (u, v))
+                render_mst_cuts_format(_edges, _hw_nodes_set,
+                                        start_node=sorted(_hw_nodes_set)[0])
 
                 with st.expander(f"📋 Pasos Kruskal{_sufix}", expanded=False):
                     _ps = [{"Paso": s["Paso"], "Arista": s["Arista"], "Peso": s["Peso"],
