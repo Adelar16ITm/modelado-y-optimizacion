@@ -1904,7 +1904,7 @@ elif module == "Transportation":
                 )
                 def _hl_1(val):
                     return "background-color:#FFD700; font-weight:bold; color:#5a4000" if val == 1 else ""
-                st.dataframe(alloc_disp.style.applymap(_hl_1), use_container_width=True)
+                st.dataframe(alloc_disp.style.map(_hl_1), use_container_width=True)
 
                 if res.get("steps"):
                     with st.expander("📋 Pasos del Método Húngaro", expanded=True):
@@ -1920,7 +1920,7 @@ elif module == "Transportation":
                             )
                             def _hl_zero(val):
                                 return "background-color:#d4edda; color:#155724; font-weight:bold" if abs(val) < 1e-6 else ""
-                            st.dataframe(_snap_df.style.applymap(_hl_zero).format("{:.4g}"),
+                            st.dataframe(_snap_df.style.map(_hl_zero).format("{:.4g}"),
                                          use_container_width=True)
                             _asgn = _step_info.get("assignment", [])
                             if _asgn:
@@ -1942,7 +1942,7 @@ elif module == "Transportation":
                     return str(int(v)) if v == int(v) else f"{v:.2f}"
                 def _hl_alloc(v):
                     return "background-color:#e8f5e9; font-weight:bold; color:#1b5e20" if v > 1e-9 else ""
-                st.dataframe(_alloc_df.style.applymap(_hl_alloc).format(_fmt_alloc),
+                st.dataframe(_alloc_df.style.map(_hl_alloc).format(_fmt_alloc),
                              use_container_width=True)
 
                 # ── Phase 1 steps ─────────────────────────────────────────────
@@ -1982,7 +1982,7 @@ elif module == "Transportation":
                                 return str(int(v)) if v == int(v) else f"{v:.2f}"
                             def _hl_sn(v):
                                 return "background-color:#e3f2fd; font-weight:bold; color:#0d47a1" if v > 1e-9 else ""
-                            st.dataframe(_sdf.style.applymap(_hl_sn).format(_fmt_sn),
+                            st.dataframe(_sdf.style.map(_hl_sn).format(_fmt_sn),
                                          use_container_width=True)
 
                 # ── MODI iterations ───────────────────────────────────────────
@@ -2033,7 +2033,7 @@ elif module == "Transportation":
                                         def _hl_it(v):
                                             return "background-color:#e8f5e9; font-weight:bold; color:#1b5e20" if v > 1e-9 else ""
                                         st.dataframe(
-                                            _snp_df.style.applymap(_hl_it).format(_fmt_it),
+                                            _snp_df.style.map(_hl_it).format(_fmt_it),
                                             use_container_width=True
                                         )
                                 with _ib:
@@ -2715,7 +2715,7 @@ elif module == "📚 Tareas":
                 _alloc = _res["allocation"]
                 _alloc_df = pd.DataFrame(_alloc, columns=_col_lbl, index=_row_lbl)
                 st.markdown("**📦 Asignación óptima x_ij:**")
-                st.dataframe(_alloc_df.style.applymap(_hw_hl_alloc).format(_hw_fmt),
+                st.dataframe(_alloc_df.style.map(_hw_hl_alloc).format(_hw_fmt),
                              use_container_width=True)
 
                 # ─── Solución INICIAL (Fase 1) + eij sobre la BFS inicial ───
@@ -2729,7 +2729,7 @@ elif module == "📚 Tareas":
                         ], index=_row_lbl + [
                             f"Dummy{k+1}" for k in range(_final_p1.shape[0] - len(_row_lbl))
                         ])
-                        st.dataframe(_init_df.style.applymap(_hw_hl_alloc).format(_hw_fmt),
+                        st.dataframe(_init_df.style.map(_hw_hl_alloc).format(_hw_fmt),
                                      use_container_width=True)
                         st.caption(f"Costo de la solución inicial: ${_res['initial_cost']:,.4f}")
 
@@ -2836,7 +2836,7 @@ elif module == "📚 Tareas":
 
         st.markdown("**BFS dada x_ij (a verificar):**")
         _bfs_df = pd.DataFrame(_datos["allocation"], columns=_col_lbl, index=_row_lbl)
-        st.dataframe(_bfs_df.style.applymap(_hw_hl_alloc).format(_hw_fmt),
+        st.dataframe(_bfs_df.style.map(_hw_hl_alloc).format(_hw_fmt),
                      use_container_width=True)
 
         if st.button(f"▶ Verificar Optimalidad de la BFS",
