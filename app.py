@@ -234,6 +234,100 @@ def render_balanced_transport_and_lp(costs, supply, demand, row_lbl=None, col_lb
     return bal_costs, bal_supply, bal_demand, bal_rows, bal_cols
 
 
+# =============================================================================
+#  Helper: formulación PPL/PE de un problema de asignación
+# =============================================================================
+def render_assignment_formulation(costs, row_lbl=None, col_lbl=None):
+    """
+    Renderiza la formulación algebraica de un problema de asignación:
+      - Variables binarias x_ij ∈ {0,1}
+      - Restricciones: cada recurso a una sola tarea (= 1)
+                       cada tarea a lo más a un recurso (≤ 1)
+      - Función objetivo: min Z = Σ c_ij x_ij
+    """
+    import numpy as np
+    costs_arr = np.array(costs, dtype=float)
+    m, n = costs_arr.shape
+
+    if row_lbl is None or len(row_lbl) != m:
+        row_lbl = [f"S{i+1}" for i in range(m)]
+    if col_lbl is None or len(col_lbl) != n:
+        col_lbl = [f"D{j+1}" for j in range(n)]
+
+    def _short(s):
+        return str(s).replace(" ", "")
+    short_rows = [_short(r) for r in row_lbl]
+    short_cols = [_short(c) for c in col_lbl]
+
+    def _fmt(v):
+        try:
+            return str(int(v)) if abs(v - int(v)) < 1e-9 else f"{v:.4g}"
+        except Exception:
+            return str(v)
+
+    st.markdown("#### 📝 Formulación PPL / PE (Asignación)")
+    st.caption(f"Variables BINARIAS. {m} recursos × {n} tareas = **{m*n} variables**.")
+
+    # ── Respuestas directas para incisos del examen ─────────────────────────
+    st.markdown("##### 📌 Respuestas directas para los incisos del examen")
+
+    # INCISO (a) — Restricciones de asignación (una por recurso/producto)
+    st.markdown(f"**📌 Inciso (a) — Restricciones «cada recurso a UNA tarea»** "
+                f"(una por recurso — {m} en total):")
+    lines_a = []
+    for i in range(m):
+        terms = [f"{short_rows[i]}{short_cols[j]}" for j in range(n)]
+        lines_a.append(f"  ({row_lbl[i]})  " + " + ".join(terms) + " = 1")
+    st.code("\n".join(lines_a), language="text")
+    st.caption(f"Copia la del recurso que pida el examen (ej. {row_lbl[0]} si pide ese).")
+
+    # INCISO (b) — Restricciones de capacidad (una por tarea/máquina)
+    st.markdown(f"**📌 Inciso (b) — Restricciones «cada tarea a LO MÁS un recurso»** "
+                f"(una por tarea — {n} en total):")
+    lines_b = []
+    for j in range(n):
+        terms = [f"{short_rows[i]}{short_cols[j]}" for i in range(m)]
+        lines_b.append(f"  ({col_lbl[j]})  " + " + ".join(terms) + " <= 1")
+    st.code("\n".join(lines_b), language="text")
+    st.caption(f"Copia la de la tarea que pida el examen (ej. {col_lbl[0]} si pide ese).")
+
+    # Función objetivo
+    st.markdown("**📌 Función objetivo:**")
+    obj_terms = []
+    for i in range(m):
+        for j in range(n):
+            c = costs_arr[i, j]
+            obj_terms.append(f"{_fmt(c)}·{short_rows[i]}{short_cols[j]}")
+    obj_lines = []
+    per_line = 4
+    for k in range(0, len(obj_terms), per_line):
+        chunk = " + ".join(obj_terms[k:k+per_line])
+        if k == 0:
+            obj_lines.append("min Z = " + chunk)
+        else:
+            obj_lines.append("        + " + chunk)
+    st.code("\n".join(obj_lines), language="text")
+
+    # Variables binarias
+    st.markdown("**📌 Variables binarias:**")
+    all_vars = ",  ".join([f"{short_rows[i]}{short_cols[j]}"
+                            for i in range(m) for j in range(n)])
+    st.code(f"  {all_vars}  ∈  {{0, 1}}", language="text")
+
+    st.markdown("---")
+    st.markdown("##### 📚 Notación matricial (versión formal)")
+    st.code(
+        "  x(i,j) = 1  si el recurso i se asigna a la tarea j, 0 si no\n"
+        f"  i ∈ {{ {', '.join(row_lbl)} }}\n"
+        f"  j ∈ {{ {', '.join(col_lbl)} }}\n\n"
+        "  min Z = Σ Σ c(i,j) · x(i,j)\n"
+        "  s.a.  Σ_j x(i,j) = 1     ∀ i  (cada recurso a una tarea)\n"
+        "        Σ_i x(i,j) ≤ 1    ∀ j  (cada tarea a lo más un recurso)\n"
+        "        x(i,j) ∈ {0, 1}    ∀ i, j",
+        language="text"
+    )
+
+
 # --- Navigation ---
 module = st.radio("Module", ["📚 Tareas", "Linear Programming", "Simplex Tutor", "Transportation", "Networks", "Shortest Path", "Integer Programming", "Dynamic Programming"], horizontal=True, label_visibility="collapsed")
 
@@ -2066,6 +2160,15 @@ elif module == "Transportation":
                 render_balanced_transport_and_lp(_prev_costs, _prev_supply, _prev_demand)
         except Exception as _prev_err:
             st.caption(f"(No se pudo generar vista previa: {_prev_err})")
+    else:
+        # Vista previa para Asignación (Húngaro)
+        try:
+            _prev_costs = cost_df.values.astype(float)
+            with st.expander("📝 Formulación PPL/PE de Asignación  (incisos 'a', 'b')",
+                             expanded=True):
+                render_assignment_formulation(_prev_costs)
+        except Exception as _prev_err:
+            st.caption(f"(No se pudo generar vista previa: {_prev_err})")
 
     if st.button("▶ Resolver", type="primary", use_container_width=True):
         try:
@@ -3132,6 +3235,10 @@ elif module == "📚 Tareas":
         st.markdown("#### 📋 Matriz de costos")
         st.dataframe(pd.DataFrame(_datos["costs"], columns=_col_lbl, index=_row_lbl).style.format("{:.4g}"),
                      use_container_width=True)
+
+        # ─── Formulación PPL para incisos (a) y (b) ───
+        with st.expander("📝 Formulación PPL/PE  (incisos 'a', 'b')", expanded=True):
+            render_assignment_formulation(_datos["costs"], _row_lbl, _col_lbl)
 
         if st.button(f"▶ Resolver con Algoritmo Húngaro", type="primary",
                      use_container_width=True, key=f"hw_hung_{_ej['id']}"):
