@@ -23,6 +23,159 @@ st.markdown("""
 
 st.title("OR Workbench Pro")
 
+
+# =============================================================================
+#  Helper: tabla balanceada (formato inciso "a") + formulación PPL
+# =============================================================================
+def render_balanced_transport_and_lp(costs, supply, demand, row_lbl=None, col_lbl=None):
+    """
+    Dado costos (m×n), oferta, demanda y etiquetas opcionales:
+      1. Balancea con dummy fila o columna (si oferta ≠ demanda)
+      2. Renderiza la tabla balanceada (formato del inciso 'a' del examen)
+      3. Renderiza la formulación completa del PPL (variables, objetivo,
+         restricciones de oferta, demanda, no negatividad).
+    """
+    import numpy as np
+    costs_arr = np.array(costs, dtype=float)
+    m, n = costs_arr.shape
+
+    # Labels por default
+    if row_lbl is None or len(row_lbl) != m:
+        row_lbl = [f"S{i+1}" for i in range(m)]
+    if col_lbl is None or len(col_lbl) != n:
+        col_lbl = [f"D{j+1}" for j in range(n)]
+
+    supply = [float(s) for s in supply]
+    demand = [float(d) for d in demand]
+    total_s = sum(supply)
+    total_d = sum(demand)
+
+    # ── Balancear ──────────────────────────────────────────────────────────
+    bal_costs = costs_arr.copy()
+    bal_supply = list(supply)
+    bal_demand = list(demand)
+    bal_rows = list(row_lbl)
+    bal_cols = list(col_lbl)
+    diff = abs(total_s - total_d)
+
+    if total_s > total_d + 1e-9:
+        bal_costs = np.hstack([bal_costs, np.zeros((bal_costs.shape[0], 1))])
+        bal_demand.append(diff)
+        bal_cols.append("Dummy")
+        dummy_msg = (f"⚠️ Desbalanceado: oferta={total_s:g}, demanda={total_d:g}. "
+                     f"Agregamos **columna Dummy** (bodega/destino ficticio) con "
+                     f"demanda = **{diff:g}** y costos = 0.")
+    elif total_d > total_s + 1e-9:
+        bal_costs = np.vstack([bal_costs, np.zeros((1, bal_costs.shape[1]))])
+        bal_supply.append(diff)
+        bal_rows.append("Dummy")
+        dummy_msg = (f"⚠️ Desbalanceado: oferta={total_s:g}, demanda={total_d:g}. "
+                     f"Agregamos **fila Dummy** (planta/origen ficticio) con "
+                     f"oferta = **{diff:g}** y costos = 0.")
+    else:
+        dummy_msg = f"✅ Balanceado: oferta = demanda = {total_s:g}."
+
+    m_b = len(bal_rows)
+    n_b = len(bal_cols)
+
+    def _fmt(v):
+        try:
+            return str(int(v)) if abs(v - int(v)) < 1e-9 else f"{v:.4g}"
+        except Exception:
+            return str(v)
+
+    # ── 1) Tabla balanceada (formato inciso a) ─────────────────────────────
+    st.markdown("#### 📋 Tabla de Transporte Balanceada (formato inciso *a*)")
+    if diff > 1e-9:
+        st.info(dummy_msg)
+    else:
+        st.success(dummy_msg)
+
+    body = []
+    for i in range(m_b):
+        row = [float(bal_costs[i, j]) for j in range(n_b)]
+        row.append(float(bal_supply[i]))
+        body.append(row)
+    body.append([float(d) for d in bal_demand] + [float(sum(bal_supply))])
+    bal_df = pd.DataFrame(body,
+                          columns=bal_cols + ["Oferta"],
+                          index=bal_rows + ["Demanda"])
+    # Resaltar oferta/demanda y dummy
+    def _style_bal(val):
+        return ""
+    def _style_bal_row(row):
+        styles = [""] * len(row)
+        if row.name == "Demanda":
+            return ["background-color:#fff3e0; font-weight:bold"] * len(row)
+        if row.name == "Dummy":
+            return ["background-color:#e1f5fe; color:#01579b"] * len(row)
+        return styles
+    def _style_bal_col(col):
+        if col.name == "Oferta":
+            return ["background-color:#fff3e0; font-weight:bold"] * len(col)
+        if col.name == "Dummy":
+            return ["background-color:#e1f5fe; color:#01579b"] * len(col)
+        return [""] * len(col)
+    try:
+        st.dataframe(
+            bal_df.style.format(_fmt).apply(_style_bal_row, axis=1).apply(_style_bal_col, axis=0),
+            use_container_width=True
+        )
+    except Exception:
+        st.dataframe(bal_df.style.format(_fmt), use_container_width=True)
+
+    # ── 2) Formulación PPL ─────────────────────────────────────────────────
+    st.markdown("#### 📝 Formulación como PPL (Programación Lineal)")
+
+    # Variables
+    st.markdown(f"**Variables de decisión** ({m_b} × {n_b} = **{m_b*n_b} variables**):")
+    var_def = (
+        "  x(i,j) = unidades enviadas del origen i al destino j\n"
+        f"  i  ∈  {{ {', '.join(bal_rows)} }}\n"
+        f"  j  ∈  {{ {', '.join(bal_cols)} }}"
+    )
+    st.code(var_def, language="text")
+
+    # Función objetivo
+    st.markdown("**Función objetivo** (minimizar costo total de transporte):")
+    obj_terms = []
+    for i in range(m_b):
+        for j in range(n_b):
+            c = bal_costs[i, j]
+            obj_terms.append(f"{_fmt(c)}·x({bal_rows[i]},{bal_cols[j]})")
+    obj_lines = []
+    per_line = 4
+    for k in range(0, len(obj_terms), per_line):
+        chunk = " + ".join(obj_terms[k:k+per_line])
+        if k == 0:
+            obj_lines.append("min Z = " + chunk)
+        else:
+            obj_lines.append("        + " + chunk)
+    st.code("\n".join(obj_lines), language="text")
+
+    # Restricciones de oferta
+    st.markdown(f"**Restricciones de oferta** (una por origen — {m_b} en total):")
+    lines = []
+    for i in range(m_b):
+        terms = [f"x({bal_rows[i]},{bal_cols[j]})" for j in range(n_b)]
+        lines.append(f"  ({bal_rows[i]})  " + " + ".join(terms) + f"  =  {_fmt(bal_supply[i])}")
+    st.code("\n".join(lines), language="text")
+
+    # Restricciones de demanda
+    st.markdown(f"**Restricciones de demanda** (una por destino — {n_b} en total):")
+    lines = []
+    for j in range(n_b):
+        terms = [f"x({bal_rows[i]},{bal_cols[j]})" for i in range(m_b)]
+        lines.append(f"  ({bal_cols[j]})  " + " + ".join(terms) + f"  =  {_fmt(bal_demand[j])}")
+    st.code("\n".join(lines), language="text")
+
+    # No negatividad
+    st.markdown("**No negatividad:**")
+    st.code("  x(i,j) >= 0   para todo i, j", language="text")
+
+    return bal_costs, bal_supply, bal_demand, bal_rows, bal_cols
+
+
 # --- Navigation ---
 module = st.radio("Module", ["📚 Tareas", "Linear Programming", "Simplex Tutor", "Transportation", "Networks", "Shortest Path", "Integer Programming", "Dynamic Programming"], horizontal=True, label_visibility="collapsed")
 
@@ -1844,6 +1997,17 @@ elif module == "Transportation":
                 key="demand_grid"
             )
 
+    # ─── Vista previa: tabla balanceada + Formulación PPL ───
+    if not is_hungarian:
+        try:
+            _prev_costs  = cost_df.values.astype(float)
+            _prev_supply = supply_df.values.flatten().astype(float)
+            _prev_demand = demand_df.values.flatten().astype(float)
+            with st.expander("📋 Tabla balanceada + Formulación PPL  (para incisos como 'a', 'd', 'e')",
+                             expanded=True):
+                render_balanced_transport_and_lp(_prev_costs, _prev_supply, _prev_demand)
+        except Exception as _prev_err:
+            st.caption(f"(No se pudo generar vista previa: {_prev_err})")
 
     if st.button("▶ Resolver", type="primary", use_container_width=True):
         try:
@@ -2690,6 +2854,14 @@ elif module == "📚 Tareas":
         _met = _ej.get("metodo", "min_cost")
         _met_disp = {"min_cost": "Costo Mínimo", "northwest": "Esquina Noroeste"}.get(_met, _met)
         st.caption(f"Método sugerido: **{_met_disp}** + Optimización MODI")
+
+        # ─── Tabla balanceada + Formulación PPL (incisos a, d, e) ───
+        with st.expander("📋 Tabla balanceada + Formulación PPL  (incisos 'a', 'd', 'e')",
+                         expanded=True):
+            render_balanced_transport_and_lp(
+                _datos["costs"], _datos["supply"], _datos["demand"],
+                row_lbl=_row_lbl, col_lbl=_col_lbl
+            )
 
         if st.button(f"▶ Resolver {_ej['id']}", type="primary",
                      use_container_width=True, key=f"hw_solve_{_ej['id']}"):
