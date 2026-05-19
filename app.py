@@ -2718,9 +2718,46 @@ elif module == "📚 Tareas":
                 st.dataframe(_alloc_df.style.applymap(_hw_hl_alloc).format(_hw_fmt),
                              use_container_width=True)
 
+                # ─── Solución INICIAL (Fase 1) + eij sobre la BFS inicial ───
+                _p1 = _res.get("phase1_steps", [])
+                if _p1:
+                    _final_p1 = _p1[-1].get("snapshot")
+                    if _final_p1 is not None:
+                        st.markdown("**🟦 Solución inicial (Fase 1 – Costo Mínimo / NW Corner):**")
+                        _init_df = pd.DataFrame(_final_p1, columns=_col_lbl + [
+                            f"Dummy{k+1}" for k in range(_final_p1.shape[1] - len(_col_lbl))
+                        ], index=_row_lbl + [
+                            f"Dummy{k+1}" for k in range(_final_p1.shape[0] - len(_row_lbl))
+                        ])
+                        st.dataframe(_init_df.style.applymap(_hw_hl_alloc).format(_hw_fmt),
+                                     use_container_width=True)
+                        st.caption(f"Costo de la solución inicial: ${_res['initial_cost']:,.4f}")
+
                 # ─── Iteraciones MODI ───
                 _iters = _res.get("iterations", [])
                 if _iters:
+                    # eij sobre la BFS inicial (iteración 0 del MODI)
+                    _it0 = _iters[0]
+                    if _it0.get("rc"):
+                        st.markdown("**🔍 Costos reducidos eij sobre la BFS inicial (celdas cerradas):**")
+                        _rc0_rows = []
+                        for cell, rc_val in sorted(_it0["rc"].items(), key=lambda x: x[1]):
+                            _rc0_rows.append({
+                                "Celda (Sx→Dy)": cell,
+                                "eij": round(rc_val, 4),
+                                "Estatus": "⬅ entra a la base" if rc_val < -1e-6 else "OK (≥ 0)"
+                            })
+                        def _style_rc0(row):
+                            if "entra" in str(row.get("Estatus", "")):
+                                return ["background-color:#ffebee; color:#b71c1c; font-weight:bold"] * len(row)
+                            return [""] * len(row)
+                        st.dataframe(pd.DataFrame(_rc0_rows).style.apply(_style_rc0, axis=1),
+                                     hide_index=True, use_container_width=True)
+                        if _it0.get("entering"):
+                            st.info(f"📥 **Ruta por abrir:** {_it0['entering']}  "
+                                    f"|  **Flujo por enviar θ = {_it0.get('theta')}**  "
+                                    f"|  eij = {_it0['Min RC']}")
+
                     with st.expander(f"📋 Iteraciones MODI ({len(_iters)} total)",
                                      expanded=False):
                         _summary = [{
@@ -3075,6 +3112,89 @@ elif module == "📚 Tareas":
             with st.expander("📋 Iteraciones (Successive Shortest Paths)", expanded=False):
                 st.dataframe(pd.DataFrame(_r["iterations"]),
                              hide_index=True, use_container_width=True)
+
+    # ────────────────────────────────────────────────────────────────────────
+    #  TIPO: project_selection (Programación entera 0-1)
+    # ────────────────────────────────────────────────────────────────────────
+    elif _tipo == "project_selection":
+        _proj_lbl = _datos["project_labels"]
+        _year_lbl = _datos["year_labels"]
+        _vpn = _datos["vpn"]
+        _reqs = _datos["requirements"]
+        _budgets = _datos["budgets"]
+        _fixed = _datos["fixed_costs"]
+        _given = _datos["given_solution"]
+        _n = len(_proj_lbl)
+
+        st.markdown("#### 📋 Datos del problema")
+        _tbl = pd.DataFrame(_reqs, columns=_year_lbl, index=_proj_lbl)
+        _tbl.insert(0, "VPN", _vpn)
+        _tbl["Costo fijo F"] = _fixed
+        st.dataframe(_tbl.style.format("{:.0f}"), use_container_width=True)
+
+        st.markdown("**Presupuesto disponible por año:**")
+        st.dataframe(pd.DataFrame([_budgets], columns=_year_lbl, index=["Presupuesto"]),
+                     use_container_width=True)
+
+        # Inciso (d): Z* con la solución dada
+        st.markdown("---")
+        st.markdown("### Inciso (d): Z\\* para la solución dada")
+        _z_d = sum((_vpn[i] - _fixed[i]) * _given[i] for i in range(_n))
+        _terms = []
+        for i in range(_n):
+            if _given[i] == 1:
+                _terms.append(f"({_vpn[i]}−{_fixed[i]})·1 = {_vpn[i]-_fixed[i]}")
+        _formula = "  +  ".join(_terms) if _terms else "0"
+        st.success(f"✅ **Z\\* = {_formula} = ${_z_d} (mil pesos)**")
+        st.caption(f"Solución dada: " +
+                   ", ".join(f"{_proj_lbl[i]}*={_given[i]}" for i in range(_n)))
+
+        # Verificar presupuestos
+        _viola = []
+        for y in range(len(_budgets)):
+            _used = sum(_reqs[i][y] * _given[i] for i in range(_n))
+            _viola.append({"Año": _year_lbl[y], "Capital usado": _used,
+                            "Presupuesto": _budgets[y],
+                            "OK": "✅" if _used <= _budgets[y] else "❌"})
+        st.markdown("**Verificación de presupuestos:**")
+        st.dataframe(pd.DataFrame(_viola), hide_index=True, use_container_width=True)
+
+        # Resolver IP completa con PuLP
+        st.markdown("---")
+        st.markdown("### Solución óptima de la IP (con PuLP)")
+        if st.button("▶ Resolver IP completa (con costos fijos)",
+                     type="primary", use_container_width=True,
+                     key=f"hw_ip_{_ej['id']}"):
+            try:
+                import pulp
+                _model = pulp.LpProblem("Seleccion_Proyectos", pulp.LpMaximize)
+                _x = [pulp.LpVariable(f"x_{_proj_lbl[i]}", cat="Binary") for i in range(_n)]
+                # Función objetivo con costos fijos
+                _model += pulp.lpSum((_vpn[i] - _fixed[i]) * _x[i] for i in range(_n)), "Z"
+                # Restricciones de presupuesto por año
+                for y in range(len(_budgets)):
+                    _model += (pulp.lpSum(_reqs[i][y] * _x[i] for i in range(_n))
+                                <= _budgets[y]), f"Budget_{_year_lbl[y]}"
+                # Contingencia: P1 ≤ P2
+                _model += _x[0] <= _x[1], "Contingencia_P1_P2"
+                _model.solve(pulp.PULP_CBC_CMD(msg=False))
+
+                if pulp.LpStatus[_model.status] == "Optimal":
+                    _sol = [int(round(_x[i].value())) for i in range(_n)]
+                    _z_opt = int(round(_model.objective.value()))
+                    st.success(f"✅ **Solución óptima IP: Z\\* = ${_z_opt} (mil pesos)**")
+                    _sol_df = pd.DataFrame([{
+                        "Proyecto": _proj_lbl[i],
+                        "Seleccionado": "✓" if _sol[i] == 1 else "—",
+                        "VPN": _vpn[i],
+                        "Costo fijo": _fixed[i],
+                        "Aporte neto": (_vpn[i] - _fixed[i]) * _sol[i],
+                    } for i in range(_n)])
+                    st.dataframe(_sol_df, hide_index=True, use_container_width=True)
+                else:
+                    st.error(f"Status: {pulp.LpStatus[_model.status]}")
+            except Exception as _err:
+                st.error(f"Error: {_err}")
 
     else:
         st.error(f"Tipo de ejercicio no soportado: {_tipo}")

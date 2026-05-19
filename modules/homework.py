@@ -565,6 +565,262 @@ TAREA_10 = {
 }
 
 # =============================================================================
+#  EXAMEN — Tercer Parcial, Mayo 2010
+# =============================================================================
+EXAMEN_2010 = {
+    "titulo": "Examen Mayo 2010 — Tercer Parcial",
+    "ejercicios": [
+        # ─────────────────────────────────────────────────────────────────────
+        {
+            "id": "1abc",
+            "titulo": "Problema 1 (P&G) — Transporte: costo mínimo + reducidos eij",
+            "tipo": "transportation_full",
+            "enunciado": (
+                "Fer (P&G) determina la política óptima de transporte desde 2 plantas a 3 bodegas.\n"
+                "  · P1 oferta=40, P2 oferta=20  (total 60)\n"
+                "  · B1 demanda=25, B2 demanda=15, B3 demanda=10  (total 50)\n\n"
+                "Costos unitarios:\n"
+                "  P1→B1=14, P1→B2=7, P1→B3=9\n"
+                "  P2→B1=8,  P2→B2=10, P2→B3=5\n\n"
+                "(a) Tabla de transporte balanceada.\n"
+                "(b) Política factible usando COSTO MÍNIMO.\n"
+                "(c) eij (efecto neto/costos reducidos) para celdas cerradas + celda entrante + θ.\n"
+                "(d) Función objetivo (escribe algebraicamente).\n"
+                "(e) Restricción de demanda de B2 (escribe algebraicamente)."
+            ),
+            "datos": {
+                "costs": [[14, 7, 9],
+                          [8, 10, 5]],
+                "supply": [40, 20],
+                "demand": [25, 15, 10],
+                "row_labels": ["P1", "P2"],
+                "col_labels": ["B1", "B2", "B3"],
+            },
+            "metodo": "min_cost",
+            "nota": (
+                "Desbalanceado: oferta(60) > demanda(50). El programa agrega columna dummy (j=4) con demanda 10 y costo 0.\n"
+                "Tie-breaking del solver: 'fila más arriba, columna más a la izquierda' — coincide con la regla del examen.\n\n"
+                "📝 Respuestas algebraicas (para los incisos d, e):\n"
+                "  (d) min Z = 14·P1B1 + 7·P1B2 + 9·P1B3 + 8·P2B1 + 10·P2B2 + 5·P2B3\n"
+                "  (e) P1B2 + P2B2 = 15   (demanda B2)"
+            ),
+        },
+        # ─────────────────────────────────────────────────────────────────────
+        {
+            "id": "2",
+            "titulo": "Problema 2 (Rex) — Asignación 2 productos × 3 máquinas",
+            "tipo": "assignment",
+            "enunciado": (
+                "Rex asigna 2 productos a 3 máquinas. Un producto → una máquina, una máquina → un producto.\n\n"
+                "Costos unitarios:\n"
+                "          M1    M2    M3\n"
+                "  P1:      2     4     2\n"
+                "  P2:      5     4     3\n\n"
+                "(a) Restricción algebraica: P1 asignado a alguna máquina.\n"
+                "(b) Restricción algebraica: no exceder capacidad de M1.\n"
+                "(c) Z* costo total óptimo."
+            ),
+            "datos": {
+                "costs": [[2, 4, 2], [5, 4, 3]],
+                "row_labels": ["P1", "P2"],
+                "col_labels": ["M1", "M2", "M3"],
+            },
+            "metodo": "hungarian",
+            "nota": (
+                "📝 Respuestas algebraicas:\n"
+                "  (a) x_P1,M1 + x_P1,M2 + x_P1,M3 = 1   (P1 asignado a exactamente una máquina)\n"
+                "  (b) x_P1,M1 + x_P2,M1 ≤ 1            (capacidad M1 a lo más 1 producto)\n"
+                "  (c) Solución óptima: P1→M1 (costo 2) y P2→M3 (costo 3) → Z* = 5\n"
+                "      (M2 queda sin asignar)\n"
+                "El solver Húngaro la encuentra directamente."
+            ),
+        },
+        # ─────────────────────────────────────────────────────────────────────
+        {
+            "id": "3a",
+            "titulo": "Problema 3a — Capacidad de la ruta A-B-E-G",
+            "tipo": "reading",
+            "enunciado": (
+                "De la red de fibra óptica, determinar el número MÁXIMO de llamadas/hora que pueden\n"
+                "circular ÚNICAMENTE por la ruta A → B → E → G.\n\n"
+                "Capacidades de los arcos de esa ruta:\n"
+                "  · A→B = 6\n"
+                "  · B→E = 3\n"
+                "  · E→G = 5"
+            ),
+            "nota": (
+                "📝 Respuesta:\n"
+                "La capacidad de una ruta = cuello de botella = mínimo de las capacidades de sus arcos.\n"
+                "  min(6, 3, 5) = **3 mil llamadas/hora**"
+            ),
+        },
+        # ─────────────────────────────────────────────────────────────────────
+        {
+            "id": "3b",
+            "titulo": "Problema 3b — Flujo máximo total A → G",
+            "tipo": "max_flow",
+            "enunciado": (
+                "Red de fibra óptica completa. Calcular el flujo máximo total de A a G.\n\n"
+                "Aristas dirigidas con capacidades (mil llamadas/hora):\n"
+                "  A→B=6, A→D=6\n"
+                "  B→C=2, B→E=3\n"
+                "  C→D=3, C→E=2, C→F=2\n"
+                "  D→C=3, D→F=1, D→G=2\n"
+                "  E→F=2, E→G=5\n"
+                "  F→G=5"
+            ),
+            "datos": {
+                "edges": [("A","B",6),("A","D",6),
+                          ("B","C",2),("B","E",3),
+                          ("C","D",3),("C","E",2),("C","F",2),
+                          ("D","C",3),("D","F",1),("D","G",2),
+                          ("E","F",2),("E","G",5),
+                          ("F","G",5)],
+                "source": "A", "target": "G",
+            },
+            "metodo": "edmonds_karp",
+            "nota": (
+                "Capacidades extraídas del diagrama del examen.\n"
+                "El algoritmo de trayectoria aumentante (Edmonds-Karp) encuentra el flujo máximo."
+            ),
+        },
+        # ─────────────────────────────────────────────────────────────────────
+        {
+            "id": "4a",
+            "titulo": "Problema 4a — Ruta más corta A → F",
+            "tipo": "shortest_path",
+            "enunciado": (
+                "Alonso busca la ruta más corta de A a F en la red de carreteras.\n\n"
+                "Distancias entre ciudades (km):\n"
+                "  A-B=210, A-C=210\n"
+                "  B-D=192, B-E=315\n"
+                "  C-D=210, C-E=180\n"
+                "  D-F=192, E-F=180"
+            ),
+            "datos": {
+                "red": {
+                    "edges": [("A","B",210),("A","C",210),
+                              ("B","D",192),("B","E",315),
+                              ("C","D",210),("C","E",180),
+                              ("D","F",192),("E","F",180)],
+                    "source": "A", "target": "F",
+                },
+            },
+            "metodo": "dijkstra",
+            "nota": "📝 Respuesta esperada: A → C → E → F  con distancia = 210+180+180 = **570 km**",
+        },
+        # ─────────────────────────────────────────────────────────────────────
+        {
+            "id": "4b",
+            "titulo": "Problema 4b — Ruta A → F con C-E cerrada (guerrilla)",
+            "tipo": "shortest_path",
+            "enunciado": (
+                "El camino C-E está cerrado. Encontrar la nueva ruta más corta A → F.\n\n"
+                "Aristas restantes:\n"
+                "  A-B=210, A-C=210, B-D=192, B-E=315, C-D=210, D-F=192, E-F=180"
+            ),
+            "datos": {
+                "red": {
+                    "edges": [("A","B",210),("A","C",210),
+                              ("B","D",192),("B","E",315),
+                              ("C","D",210),
+                              ("D","F",192),("E","F",180)],
+                    "source": "A", "target": "F",
+                },
+            },
+            "metodo": "dijkstra",
+            "nota": "📝 Respuesta esperada: A → B → D → F  con distancia = 210+192+192 = **594 km**",
+        },
+        # ─────────────────────────────────────────────────────────────────────
+        {
+            "id": "4c",
+            "titulo": "Problema 4c — Ruta más corta A → D",
+            "tipo": "shortest_path",
+            "enunciado": (
+                "La cita cambia a la ciudad D. Encontrar la ruta más corta A → D."
+            ),
+            "datos": {
+                "red": {
+                    "edges": [("A","B",210),("A","C",210),
+                              ("B","D",192),("B","E",315),
+                              ("C","D",210),("C","E",180),
+                              ("D","F",192),("E","F",180)],
+                    "source": "A", "target": "D",
+                },
+            },
+            "metodo": "dijkstra",
+            "nota": "📝 Respuesta esperada: A → B → D  con distancia = 210+192 = **402 km**",
+        },
+        # ─────────────────────────────────────────────────────────────────────
+        {
+            "id": "4d",
+            "titulo": "Problema 4d — MST: tender líneas telefónicas",
+            "tipo": "mst",
+            "enunciado": (
+                "Alonso obtiene el contrato. Las líneas siguen las carreteras existentes.\n"
+                "Determinar el árbol de expansión mínima (MST) que conecta TODAS las ciudades."
+            ),
+            "datos": {
+                "edges": [("A","B",210),("A","C",210),
+                          ("B","D",192),("B","E",315),
+                          ("C","D",210),("C","E",180),
+                          ("D","F",192),("E","F",180)],
+            },
+            "metodo": "kruskal",
+            "nota": (
+                "📝 Respuesta esperada (Kruskal):\n"
+                "  Aristas: C-E (180), E-F (180), B-D (192), D-F (192), A-B (210)\n"
+                "  Longitud total = 180+180+192+192+210 = **954 km**\n"
+                "El formato C / C' del examen pide cortes — el programa muestra directamente las 5 aristas del MST."
+            ),
+        },
+        # ─────────────────────────────────────────────────────────────────────
+        {
+            "id": "5",
+            "titulo": "Problema 5 (Pepe) — Selección de proyectos (IP)",
+            "tipo": "project_selection",
+            "enunciado": (
+                "Pepe decide entre 4 proyectos (P1, P2, P3, P4). Cifras en miles de pesos.\n\n"
+                "  Proyecto │ VPN │ Año1 │ Año2 │ Año3 │ Año4\n"
+                "  ─────────┼─────┼──────┼──────┼──────┼─────\n"
+                "    P1     │ 50  │  10  │  15  │  20  │  10\n"
+                "    P2     │ 70  │  15  │  20  │  10  │  10\n"
+                "    P3     │ 30  │  20  │  10  │  10  │  15\n"
+                "    P4     │ 40  │  10  │  10  │  15  │  20\n"
+                "  ─────────┼─────┼──────┼──────┼──────┼─────\n"
+                "  Presupuesto │   50 │  45 │  50 │  45\n\n"
+                "Restricciones extra:\n"
+                "  · P2 contingente respecto a P1: si P1=1 entonces P2=1  →  P1 ≤ P2\n"
+                "  · Costos fijos al ejecutar: F1=30, F2=40, F3=50, F4=70\n\n"
+                "(a) Función objetivo  (d) Z* para P1=1, P2=1, P3=0, P4=0"
+            ),
+            "datos": {
+                "vpn":          [50, 70, 30, 40],
+                "requirements": [[10, 15, 20, 10],
+                                 [15, 20, 10, 10],
+                                 [20, 10, 10, 15],
+                                 [10, 10, 15, 20]],
+                "budgets":      [50, 45, 50, 45],
+                "fixed_costs":  [30, 40, 50, 70],
+                "given_solution": [1, 1, 0, 0],
+                "project_labels": ["P1", "P2", "P3", "P4"],
+                "year_labels": ["Año 1", "Año 2", "Año 3", "Año 4"],
+            },
+            "nota": (
+                "📝 Respuestas algebraicas:\n"
+                "  (a) max Z = 50·P1 + 70·P2 + 30·P3 + 40·P4   (sin costos fijos)\n"
+                "  (b) 20·P1 + 10·P2 + 10·P3 + 15·P4 ≤ 50      (presupuesto año 3)\n"
+                "  (c) P1 ≤ P2                                  (contingencia)\n"
+                "  (d) Con costos fijos:\n"
+                "      Z* = (50−30)·1 + (70−40)·1 − 20·0 − 30·0 = 20 + 30 = **50 mil pesos**\n"
+                "El programa también resuelve la IP completa con PuLP para verificar."
+            ),
+        },
+    ],
+}
+
+
+# =============================================================================
 #  Diccionario maestro
 # =============================================================================
 TAREAS = {
@@ -572,6 +828,7 @@ TAREAS = {
     "Tarea 8 — Asignación": TAREA_8,
     "Tarea 9 — Redes de flujo (1)": TAREA_9,
     "Tarea 10 — Redes de flujo (2)": TAREA_10,
+    "📝 Examen Mayo 2010": EXAMEN_2010,
 }
 
 
