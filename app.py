@@ -2620,6 +2620,38 @@ elif module == "Networks":
                                  hide_index=True, use_container_width=True)
                     st.caption("🟡 Última fila = flujo máximo total.")
 
+                # ─── Capacidades RESIDUALES (segunda gráfica del examen) ───
+                st.markdown("### 🔄 Capacidades Residuales (al terminar el algoritmo)")
+                st.caption("Esta es la **segunda gráfica** que aparece en exámenes tipo 2010. "
+                           "Para cada arco original `u → v`: el número hacia adelante (→) es lo que "
+                           "TODAVÍA podrías mandar; el número hacia atrás (←) es el flujo que YA enviaste "
+                           "(y que podrías cancelar).")
+
+                _res_df = pd.DataFrame(_res["residual_summary"])
+                def _style_res(row):
+                    if row.get("Cap. residual (→)", 1) <= 1e-6:
+                        return ["background-color:#fff3cd; font-weight:bold; color:#856404"] * len(row)
+                    return [""] * len(row)
+                st.dataframe(_res_df.style.apply(_style_res, axis=1),
+                             hide_index=True, use_container_width=True)
+                st.caption("🟡 Filas amarillas = arcos saturados (residual forward = 0).")
+
+                # Dibujar la gráfica residual
+                # Mostramos arcos hacia adelante con su capacidad residual,
+                # y arcos hacia atrás (en otro color) con el flujo enviado
+                st.markdown("**📊 Gráfica residual** (← arcos azules = flujo cancelable; → grises = capacidad disponible):")
+                # Combinar arcos forward y backward para el dibujo
+                _all_res_edges = list(_res["residual_edges_fwd"]) + list(_res["residual_edges_bwd"])
+                if _all_res_edges:
+                    # Aristas saturadas (forward residual = 0) las resaltamos como "saturadas"
+                    _sat_residual = [(u, v, c) for (u, v, c) in _res["residual_edges_fwd"] if c <= 1e-6]
+                    st.plotly_chart(
+                        _draw_network(_all_res_edges, highlight_edges=_sat_residual,
+                                      directed=True,
+                                      title=f"Red residual — flujo enviado = {_res['max_flow']:g}"),
+                        use_container_width=True, key="mf_residual_graph"
+                    )
+
             else:  # Minimum Cost Flow
                 _mcf_cost_edges = [
                     (str(r["u"]), str(r["v"]), float(r["Capacidad"]), float(r["Costo/unidad"]))
@@ -3400,6 +3432,19 @@ elif module == "📚 Tareas":
             with st.expander("📋 Caminos aumentantes", expanded=False):
                 st.dataframe(pd.DataFrame(_r["iterations"]),
                              hide_index=True, use_container_width=True)
+
+            # ─── Capacidades RESIDUALES (segunda gráfica del examen) ───
+            st.markdown("### 🔄 Capacidades Residuales (segunda gráfica)")
+            st.caption("Para cada arco `u → v`: el número (→) es lo que aún puedes mandar; "
+                       "(←) es el flujo enviado, que podrías cancelar.")
+            _res_df = pd.DataFrame(_r["residual_summary"])
+            def _style_res_hw(row):
+                if row.get("Cap. residual (→)", 1) <= 1e-6:
+                    return ["background-color:#fff3cd; font-weight:bold; color:#856404"] * len(row)
+                return [""] * len(row)
+            st.dataframe(_res_df.style.apply(_style_res_hw, axis=1),
+                         hide_index=True, use_container_width=True)
+            st.caption("🟡 Filas amarillas = arcos saturados (residual hacia adelante = 0).")
 
     # ────────────────────────────────────────────────────────────────────────
     #  TIPO: min_cost_flow

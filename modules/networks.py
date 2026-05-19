@@ -207,25 +207,44 @@ class NetworkSolver:
 
         # Build per-edge flow summary (only original edges, only if flow > 0)
         edge_flows = []
+        residual_summary = []
+        residual_edges_fwd = []   # (u, v, cap_residual_forward)
+        residual_edges_bwd = []   # (v, u, flow_enviado) — solo si flow > 0
         for u, v, cap_uv in self.edges:
-            f = flow[u][v]
+            f = max(flow[u][v], 0)
+            fwd_res = cap_uv - f   # capacidad disponible hacia adelante
+            bwd_res = f            # flujo enviado = capacidad de regreso (cancelable)
             edge_flows.append({
                 "Arista":     f"{u} → {v}",
                 "Capacidad":  cap_uv,
-                "Flujo":      round(max(f, 0), 4),
-                "Holgura":    round(cap_uv - max(f, 0), 4),
-                "Saturada":   "🔴 Sí" if abs(cap_uv - max(f, 0)) < 1e-6 else "🟢 No",
+                "Flujo":      round(f, 4),
+                "Holgura":    round(fwd_res, 4),
+                "Saturada":   "🔴 Sí" if abs(fwd_res) < 1e-6 else "🟢 No",
             })
+            residual_summary.append({
+                "Arco original":          f"{u} → {v}",
+                "Capacidad original":     cap_uv,
+                "Flujo enviado":          round(f, 4),
+                "Cap. residual (→)":      round(fwd_res, 4),
+                "Cap. residual (←)":      round(bwd_res, 4),
+            })
+            residual_edges_fwd.append((u, v, round(fwd_res, 4)))
+            if bwd_res > 1e-9:
+                residual_edges_bwd.append((v, u, round(bwd_res, 4)))
 
         return {
-            "max_flow":   total_flow,
-            "edge_flows": edge_flows,
-            "iterations": iterations,
-            "source":     source,
-            "target":     target,
-            "nodes":      nodes,
-            "all_edges":  self.edges,
-            "status":     "Óptimo",
+            "max_flow":          total_flow,
+            "edge_flows":        edge_flows,
+            "iterations":        iterations,
+            "source":            source,
+            "target":            target,
+            "nodes":             nodes,
+            "all_edges":         self.edges,
+            "status":            "Óptimo",
+            # ── Capacidades residuales (después de correr el algoritmo) ──
+            "residual_summary":   residual_summary,
+            "residual_edges_fwd": residual_edges_fwd,
+            "residual_edges_bwd": residual_edges_bwd,
         }
 
     # ------------------------------------------------------------------ #
