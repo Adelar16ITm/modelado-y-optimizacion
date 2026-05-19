@@ -153,9 +153,13 @@ class NetworkSolver:
         """
         Edmonds-Karp: BFS to find augmenting paths until no more exist.
         Returns max flow value and flow on each edge, plus iteration steps.
+
+        NOTA: ordenamos `nodes` alfabéticamente para que el algoritmo sea
+        determinístico y la distribución de flujo coincida con la solución
+        manual típica de los libros (Hillier, etc.).
         """
         source, target = str(source), str(target)
-        nodes = list(set(n for u, v, _ in self.edges for n in (u, v)))
+        nodes = sorted(set(n for u, v, _ in self.edges for n in (u, v)))
 
         # Capacity matrix as dict of dicts
         cap  = {u: {v: 0.0 for v in nodes} for u in nodes}
