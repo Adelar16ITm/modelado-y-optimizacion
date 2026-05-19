@@ -127,7 +127,65 @@ def render_balanced_transport_and_lp(costs, supply, demand, row_lbl=None, col_lb
     # ── 2) Formulación PPL ─────────────────────────────────────────────────
     st.markdown("#### 📝 Formulación como PPL (Programación Lineal)")
 
-    # Variables
+    # Nombres "naturales" tipo examen: P1B1, P1B2, etc. (concatena row+col, sin espacios)
+    def _short(s):
+        return str(s).replace(" ", "").replace("(", "").replace(")", "").replace("Dummy", "D")
+    short_rows = [_short(r) for r in row_lbl]  # ORIGINAL (sin dummy)
+    short_cols = [_short(c) for c in col_lbl]
+    short_rows_b = [_short(r) for r in bal_rows]  # CON dummy
+    short_cols_b = [_short(c) for c in bal_cols]
+
+    # ── 2a) Respuestas directas para incisos (d) y (e) ────────────────────
+    st.markdown("##### 📌 Respuestas directas para los incisos del examen")
+    st.caption("Estas usan los **nombres originales del problema** (sin dummy), "
+               "que es lo que normalmente piden los incisos (d), (e) del examen.")
+
+    # INCISO (d) — Función objetivo con variables originales (sin dummy)
+    st.markdown("**📌 Inciso (d) — Función objetivo:**")
+    obj_terms_orig = []
+    for i in range(m):
+        for j in range(n):
+            c = costs_arr[i, j]
+            var = f"{short_rows[i]}{short_cols[j]}"
+            obj_terms_orig.append(f"{_fmt(c)}·{var}")
+    obj_line = "min Z = " + " + ".join(obj_terms_orig)
+    st.code(obj_line, language="text")
+
+    # INCISO (e) — Restricciones de DEMANDA por destino (formato examen)
+    # Si oferta > demanda: la igualdad de demanda es '=' (siempre se satisface)
+    # Si demanda > oferta: la demanda puede ser '<=' o '>=' según contexto
+    dem_op = "=" if total_s >= total_d - 1e-9 else "<="
+    st.markdown(f"**📌 Inciso (e) — Restricciones de demanda** (una por destino — copia la que te pida el examen):")
+    dem_lines_e = []
+    for j in range(n):
+        terms = [f"{short_rows[i]}{short_cols[j]}" for i in range(m)]
+        dem_lines_e.append(
+            f"  ({col_lbl[j]})  " + " + ".join(terms) + f" {dem_op} {_fmt(demand[j])}"
+        )
+    st.code("\n".join(dem_lines_e), language="text")
+
+    # BONUS: restricciones de oferta originales (por si el examen pide en lugar de demanda)
+    sup_op = "<=" if total_s > total_d + 1e-9 else "="
+    st.markdown(f"**📌 Bonus — Restricciones de oferta** (una por origen, por si el examen las pide):")
+    sup_lines_e = []
+    for i in range(m):
+        terms = [f"{short_rows[i]}{short_cols[j]}" for j in range(n)]
+        sup_lines_e.append(
+            f"  ({row_lbl[i]})  " + " + ".join(terms) + f" {sup_op} {_fmt(supply[i])}"
+        )
+    st.code("\n".join(sup_lines_e), language="text")
+
+    # No-negatividad versión examen
+    st.markdown("**📌 No negatividad:**")
+    nonneg = ",  ".join([f"{short_rows[i]}{short_cols[j]}"
+                          for i in range(m) for j in range(n)])
+    st.code(f"  {nonneg}  >=  0", language="text")
+
+    st.markdown("---")
+    st.markdown("##### 📚 Formulación completa balanceada (con notación x(i,j) y dummy)")
+    st.caption("Esta es la versión 'completa' incluyendo dummy y notación matricial.")
+
+    # Variables (notación matricial completa)
     st.markdown(f"**Variables de decisión** ({m_b} × {n_b} = **{m_b*n_b} variables**):")
     var_def = (
         "  x(i,j) = unidades enviadas del origen i al destino j\n"
