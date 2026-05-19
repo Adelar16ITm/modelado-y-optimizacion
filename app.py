@@ -235,6 +235,148 @@ def render_balanced_transport_and_lp(costs, supply, demand, row_lbl=None, col_lb
 
 
 # =============================================================================
+#  Helper: layout en capas (BFS) + gráfica residual estilo examen
+# =============================================================================
+def auto_layered_layout(edges, source, sink):
+    """
+    Layout izquierda→derecha basado en BFS desde source.
+    Coloca source a la izquierda, sink a la derecha, otros nodos por capas.
+    """
+    nodes = list(set(str(n) for u, v, _ in edges for n in (u, v)))
+    source, sink = str(source), str(sink)
+
+    # BFS desde source para asignar nivel/columna
+    levels = {source: 0}
+    queue = [source]
+    while queue:
+        node = queue.pop(0)
+        for tup in edges:
+            u, v = str(tup[0]), str(tup[1])
+            if u == node and v not in levels:
+                levels[v] = levels[node] + 1
+                queue.append(v)
+
+    # Sink debe estar a la derecha
+    max_lvl = max(levels.values()) if levels else 0
+    if sink in levels and levels[sink] < max_lvl:
+        levels[sink] = max_lvl
+    # Nodos no alcanzables: ponlos en el medio
+    for n in nodes:
+        if n not in levels:
+            levels[n] = max(max_lvl // 2, 1)
+    max_lvl = max(levels.values()) if levels else 1
+
+    # Agrupar por nivel
+    by_level = {}
+    for n, lvl in levels.items():
+        by_level.setdefault(lvl, []).append(n)
+
+    # Posiciones: x = nivel normalizado, y = distribuido vertical
+    positions = {}
+    for lvl, nodes_at_level in by_level.items():
+        x = -1 + 2 * lvl / max(max_lvl, 1)   # rango [-1, 1]
+        n_at = len(nodes_at_level)
+        for i, n in enumerate(sorted(nodes_at_level)):
+            if n_at == 1:
+                y = 0.0
+            else:
+                y = -1.0 + 2.0 * i / (n_at - 1)
+            positions[n] = (x, y)
+    return positions
+
+
+def draw_max_flow_residual_graph(original_edges, residual_summary, source, sink,
+                                  title="Red Residual"):
+    """
+    Dibuja la red residual estilo examen:
+      - Layout en capas (source a la izquierda, sink a la derecha)
+      - Para cada arco original u→v: una flecha con etiqueta 'fwd | flow'
+        (forward residual = capacidad disponible, flow = enviado/cancelable)
+      - Arcos saturados (fwd=0) en color naranja/dorado
+    """
+    import plotly.graph_objects as go
+    import math
+
+    pos = auto_layered_layout(original_edges, source, sink)
+    nodes = list(pos.keys())
+
+    fig = go.Figure()
+
+    # Index residual_summary por arco para acceso rápido
+    res_by_arc = {}
+    for r in residual_summary:
+        arc_str = r["Arco original"]  # "u → v"
+        u_str, v_str = arc_str.split(" → ")
+        res_by_arc[(u_str, v_str)] = r
+
+    # Dibujar arcos
+    for tup in original_edges:
+        u, v = str(tup[0]), str(tup[1])
+        if u not in pos or v not in pos:
+            continue
+        x0, y0 = pos[u]
+        x1, y1 = pos[v]
+        r = res_by_arc.get((u, v))
+        if r is None:
+            continue
+        fwd = r["Cap. residual (→)"]
+        bwd = r["Cap. residual (←)"]
+
+        saturated = fwd <= 1e-6
+        arrow_color = "#E67E22" if saturated else "#7F8C8D"   # naranja saturado, gris normal
+        width = 3.5 if saturated else 2
+
+        # Flecha forward
+        fig.add_annotation(
+            x=x1, y=y1, ax=x0, ay=y0,
+            xref="x", yref="y", axref="x", ayref="y",
+            showarrow=True, arrowhead=3, arrowsize=1.4,
+            arrowwidth=width, arrowcolor=arrow_color,
+            standoff=18, startstandoff=18
+        )
+
+        # Etiqueta: "fwd | bwd"
+        def _f(x):
+            return str(int(x)) if abs(x - int(x)) < 1e-9 else f"{x:.4g}"
+        mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+        # Offset perpendicular para que la etiqueta no se monte sobre la flecha
+        dx, dy = x1 - x0, y1 - y0
+        length = max(math.sqrt(dx*dx + dy*dy), 1e-6)
+        ox, oy = -dy / length * 0.07, dx / length * 0.07  # perpendicular
+
+        label = f"<b>{_f(fwd)}</b> | {_f(bwd)}"
+        fig.add_annotation(
+            x=mx + ox, y=my + oy,
+            text=label, showarrow=False,
+            font=dict(size=11, color="#2C3E50" if not saturated else "#A04000"),
+            bgcolor="rgba(255,255,255,0.92)",
+            bordercolor=arrow_color, borderwidth=1, borderpad=3
+        )
+
+    # Dibujar nodos
+    for n in nodes:
+        x, y = pos[n]
+        is_st = (n == str(source)) or (n == str(sink))
+        color = "#27AE60" if n == str(source) else ("#C0392B" if n == str(sink) else "#0068c9")
+        fig.add_trace(go.Scatter(
+            x=[x], y=[y], mode="markers+text",
+            marker=dict(size=42, color=color, line=dict(color="white", width=3)),
+            text=[n], textposition="middle center",
+            textfont=dict(color="white", size=14, family="Arial Black"),
+            showlegend=False, hoverinfo="skip"
+        ))
+
+    fig.update_layout(
+        height=460, title=title,
+        margin=dict(l=20, r=20, t=40, b=20),
+        xaxis=dict(visible=False, range=[-1.3, 1.3]),
+        yaxis=dict(visible=False, range=[-1.3, 1.3], scaleanchor="x", scaleratio=1),
+        plot_bgcolor="#FAFAFA", paper_bgcolor="white",
+    )
+    return fig
+
+
+# =============================================================================
 #  Helper: formulación PPL/PE de un problema de asignación
 # =============================================================================
 def render_assignment_formulation(costs, row_lbl=None, col_lbl=None):
@@ -2636,21 +2778,20 @@ elif module == "Networks":
                              hide_index=True, use_container_width=True)
                 st.caption("🟡 Filas amarillas = arcos saturados (residual forward = 0).")
 
-                # Dibujar la gráfica residual
-                # Mostramos arcos hacia adelante con su capacidad residual,
-                # y arcos hacia atrás (en otro color) con el flujo enviado
-                st.markdown("**📊 Gráfica residual** (← arcos azules = flujo cancelable; → grises = capacidad disponible):")
-                # Combinar arcos forward y backward para el dibujo
-                _all_res_edges = list(_res["residual_edges_fwd"]) + list(_res["residual_edges_bwd"])
-                if _all_res_edges:
-                    # Aristas saturadas (forward residual = 0) las resaltamos como "saturadas"
-                    _sat_residual = [(u, v, c) for (u, v, c) in _res["residual_edges_fwd"] if c <= 1e-6]
-                    st.plotly_chart(
-                        _draw_network(_all_res_edges, highlight_edges=_sat_residual,
-                                      directed=True,
-                                      title=f"Red residual — flujo enviado = {_res['max_flow']:g}"),
-                        use_container_width=True, key="mf_residual_graph"
-                    )
+                # ─── Gráfica residual estilo examen ───
+                st.markdown("**📊 Gráfica residual estilo examen** "
+                            "(layout en capas, cada arco etiquetado **`forward | backward`**):")
+                st.caption("**Forward** = capacidad disponible (lo que aún puedes mandar). "
+                           "**Backward** = flujo enviado (lo que podrías cancelar). "
+                           "Arcos en **naranja** = saturados (forward = 0).")
+                st.plotly_chart(
+                    draw_max_flow_residual_graph(
+                        _net_edges, _res["residual_summary"],
+                        _mf_source, _mf_sink,
+                        title=f"Red residual — flujo máximo = {_res['max_flow']:g}"
+                    ),
+                    use_container_width=True, key="mf_residual_graph"
+                )
 
             else:  # Minimum Cost Flow
                 _mcf_cost_edges = [
@@ -3435,8 +3576,10 @@ elif module == "📚 Tareas":
 
             # ─── Capacidades RESIDUALES (segunda gráfica del examen) ───
             st.markdown("### 🔄 Capacidades Residuales (segunda gráfica)")
-            st.caption("Para cada arco `u → v`: el número (→) es lo que aún puedes mandar; "
-                       "(←) es el flujo enviado, que podrías cancelar.")
+            st.caption("Para cada arco `u → v`: el número **forward** es lo que aún puedes mandar; "
+                       "**backward** es el flujo enviado, que podrías cancelar.")
+
+            # Tabla
             _res_df = pd.DataFrame(_r["residual_summary"])
             def _style_res_hw(row):
                 if row.get("Cap. residual (→)", 1) <= 1e-6:
@@ -3445,6 +3588,17 @@ elif module == "📚 Tareas":
             st.dataframe(_res_df.style.apply(_style_res_hw, axis=1),
                          hide_index=True, use_container_width=True)
             st.caption("🟡 Filas amarillas = arcos saturados (residual hacia adelante = 0).")
+
+            # Gráfica estilo examen (layout en capas + etiquetas duales)
+            st.markdown("**📊 Gráfica residual estilo examen:**")
+            st.plotly_chart(
+                draw_max_flow_residual_graph(
+                    _edges, _r["residual_summary"],
+                    _datos["source"], _datos["target"],
+                    title=f"Red residual — flujo máximo = {_r['max_flow']:g}"
+                ),
+                use_container_width=True, key=f"hw_mf_residual_{_ej['id']}"
+            )
 
     # ────────────────────────────────────────────────────────────────────────
     #  TIPO: min_cost_flow
